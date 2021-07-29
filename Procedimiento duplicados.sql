@@ -55,6 +55,10 @@ WHERE TenantID = 0x' + CONVERT(nvarchar(max),  @TenantIdOrigin, 2) + ' AND Prefi
 '(SELECT Prefix + CONVERT(varchar(max), Number) FROM [' + @CloudMultiTenantNameDestination + '].[dbo].[DianResolution] ' + 
 'WHERE TenantID = 0x' + CONVERT(nvarchar(max), @TenantIdDestination, 2) + ')'
 
+DECLARE @SQLUsersID AS NVARCHAR(MAX) = 'SELECT TOP 1 @UsersID = UsersID FROM ' + @CloudMultiTenantNameDestination + '.dbo.Users WHERE TenantID = 0x' + CONVERT(nvarchar(max), @TenantIdDestination, 2)
+DECLARE @UsersID as bigint
+EXECUTE sp_executesql @SQLUsersID, N'@UsersID VARBINARY(85) OUTPUT', @UsersID OUTPUT
+
 Declare @DianResolutionID bigint
 Declare @Number bigint
 Declare @Prefix varchar(5)
@@ -84,7 +88,7 @@ BEGIN
     --PRINT CONVERT(nvarchar(max), @DianResolutionID) + ' ' + @Prefix + ' - ' + CONVERT(nvarchar(max), @Number)
 	Declare @InsertSQLResolution as nvarchar(max) = 
 	'INSERT INTO ' + @CloudMultiTenantNameDestination + '.dbo.DianResolution ' + 
-	'(Number, Prefix, StartNumber, EndNumber, AuthorizationDate, StartDate, EndDate, EntryType, CreatedByDate, TechnicalKey, TenantID, EntrySubType, TestID)' +
+	'(Number, Prefix, StartNumber, EndNumber, AuthorizationDate, StartDate, EndDate, EntryType, CreatedByDate, CreatedByUser, TechnicalKey, TenantID, EntrySubType, TestID)' +
 	'VALUES (' +
 	convert(varchar(max), @Number) + ',' +
 	'''' + @Prefix + ''',' +
@@ -95,6 +99,7 @@ BEGIN
 	'''' + convert(varchar(max), @EndDate, 13) + ''',' +
 	convert(varchar(max), @EntryType) + ',' +
 	'''' + convert(varchar(max), GETDATE(), 13) + ''',' +
+	convert(varchar(max), @UsersID) + ',' +
 	'''' + @TechnicalKey + ''',' +
 	'0x' + CONVERT(nvarchar(max), @TenantIdDestination, 2) + ', ' +
 	convert(varchar(max), @EntrySubType) + ',' +
