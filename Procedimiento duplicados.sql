@@ -46,8 +46,6 @@ EXECUTE sp_executesql @SQLSelectDestination, N'@TenantID AS VARBINARY(85) OUTPUT
 DECLARE @SQLDianResolutionOrigin AS NVARCHAR(MAX) = 'SELECT * FROM [' + @CloudMultiTenantNameOrigin + '].[dbo].[DianResolution] WHERE TenantID = 0x' + CONVERT(nvarchar(max), @TenantIdOrigin, 2)
 DECLARE @SQLDianResolutionDestination AS NVARCHAR(MAX) = 'SELECT * FROM [' + @CloudMultiTenantNameDestination + '].[dbo].[DianResolution] WHERE TenantID = 0x' + CONVERT(nvarchar(max), @TenantIdDestination, 2)
 
---CREATE TABLE #CopiedResolutions (OldCode bigint, NewCode bigint)
-
 DECLARE @SQLDianResolutionToCopy AS NVARCHAR(MAX) = 
 'declare resolutions_cursor CURSOR FOR ' + 
 'SELECT * FROM [' + @CloudMultiTenantNameOrigin + '].[dbo].[DianResolution] 
@@ -58,6 +56,9 @@ WHERE TenantID = 0x' + CONVERT(nvarchar(max),  @TenantIdOrigin, 2) + ' AND Prefi
 DECLARE @SQLUsersID AS NVARCHAR(MAX) = 'SELECT TOP 1 @UsersID = UsersID FROM ' + @CloudMultiTenantNameDestination + '.dbo.Users WHERE TenantID = 0x' + CONVERT(nvarchar(max), @TenantIdDestination, 2)
 DECLARE @UsersID as bigint
 EXECUTE sp_executesql @SQLUsersID, N'@UsersID VARBINARY(85) OUTPUT', @UsersID OUTPUT
+
+CREATE TABLE #CopiedResolutions (OldCode bigint, NewCode bigint)
+Declare @InsertedID as bigint
 
 Declare @DianResolutionID bigint
 Declare @Number bigint
@@ -103,9 +104,11 @@ BEGIN
 	'0x' + CONVERT(nvarchar(max), @TenantIdDestination, 2) + ', ' +
 	convert(varchar(max), @EntrySubType) + ',' +
 	iif(@TestID is null, 'null', '''' + @TestID + '''') +
-	')'
+	') ' +
+	'SET @InsertedID = SCOPE_IDENTITY()'
 	--print @InsertSQLResolution
-	EXECUTE sp_executesql @InsertSQLResolution
+	EXECUTE sp_executesql @InsertSQLResolution, N'@InsertedID bigint OUTPUT', @InsertedID OUTPUT 
+	Insert into #CopiedResolutions(OldCode, NewCode) Values (@DianResolutionID, @InsertedID)
     FETCH NEXT FROM resolutions_cursor 
 	INTO @DianResolutionID, @Number, @Prefix, @StartNumber, @EndNumber, @AuthorizationDate, @StartDate, @EndDate, @EntryType, @CreatedByDate, @CreatedByUser, @UpdatedByUser, @UpdatedByDate, @TechnicalKey, @TenantID, @EntrySubType, @TestID
 END
@@ -115,5 +118,5 @@ DEALLOCATE resolutions_cursor
 
 --EXECUTE sp_executesql @SQLDianResolutionOrigin
 --EXECUTE sp_executesql @SQLDianResolutionDestination
-
---DROP TABLE #CopiedResolutions
+SELECT * FROM #CopiedResolutions
+DROP TABLE #CopiedResolutions
