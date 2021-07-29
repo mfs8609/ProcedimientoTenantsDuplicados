@@ -85,7 +85,6 @@ INTO @DianResolutionID, @Number, @Prefix, @StartNumber, @EndNumber, @Authorizati
 
 WHILE @@FETCH_STATUS = 0
 BEGIN
-    --PRINT CONVERT(nvarchar(max), @DianResolutionID) + ' ' + @Prefix + ' - ' + CONVERT(nvarchar(max), @Number)
 	Declare @InsertSQLResolution as nvarchar(max) = 
 	'INSERT INTO ' + @CloudMultiTenantNameDestination + '.dbo.DianResolution ' + 
 	'(Number, Prefix, StartNumber, EndNumber, AuthorizationDate, StartDate, EndDate, EntryType, CreatedByDate, CreatedByUser, TechnicalKey, TenantID, EntrySubType, TestID)' +
@@ -103,9 +102,9 @@ BEGIN
 	'''' + @TechnicalKey + ''',' +
 	'0x' + CONVERT(nvarchar(max), @TenantIdDestination, 2) + ', ' +
 	convert(varchar(max), @EntrySubType) + ',' +
-	'''' + isnull(@TestID, '') + '''' +
+	iif(@TestID is null, 'null', '''' + @TestID + '''') +
 	')'
-	print @InsertSQLResolution
+	--print @InsertSQLResolution
 	EXECUTE sp_executesql @InsertSQLResolution
     FETCH NEXT FROM resolutions_cursor 
 	INTO @DianResolutionID, @Number, @Prefix, @StartNumber, @EndNumber, @AuthorizationDate, @StartDate, @EndDate, @EntryType, @CreatedByDate, @CreatedByUser, @UpdatedByUser, @UpdatedByDate, @TechnicalKey, @TenantID, @EntrySubType, @TestID
