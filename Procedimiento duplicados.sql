@@ -43,8 +43,7 @@ EXECUTE sp_executesql @SQLSelectOrigin, N'@TenantID VARBINARY(85) OUTPUT', @Tena
 EXECUTE sp_executesql @SQLSelectDestination, N'@TenantID AS VARBINARY(85) OUTPUT', @TenantIdDestination OUTPUT
 
 
-DECLARE @SQLDianResolutionOrigin AS NVARCHAR(MAX) = 'SELECT * FROM [' + @CloudMultiTenantNameOrigin + '].[dbo].[DianResolution] WHERE TenantID = 0x' + CONVERT(nvarchar(max), @TenantIdOrigin, 2)
-DECLARE @SQLDianResolutionDestination AS NVARCHAR(MAX) = 'SELECT * FROM [' + @CloudMultiTenantNameDestination + '].[dbo].[DianResolution] WHERE TenantID = 0x' + CONVERT(nvarchar(max), @TenantIdDestination, 2)
+--Proceso de copia de resoluciones--
 
 DECLARE @SQLDianResolutionToCopy AS NVARCHAR(MAX) = 
 'declare resolutions_cursor CURSOR FOR ' + 
@@ -116,7 +115,72 @@ END
 CLOSE resolutions_cursor
 DEALLOCATE resolutions_cursor
 
---EXECUTE sp_executesql @SQLDianResolutionOrigin
---EXECUTE sp_executesql @SQLDianResolutionDestination
+--Fin Proceso de copia de resoluciones--
+
+--Proceso de copia de terceros--
+
+DECLARE @SQLThirdPartyToCopy AS NVARCHAR(MAX) = 
+'declare third_party_cursor CURSOR FOR ' + 
+'SELECT * FROM [' + @CloudMultiTenantNameOrigin + '].[dbo].[ThirdParty] 
+WHERE TenantID = 0x' + CONVERT(nvarchar(max),  @TenantIdOrigin, 2) + ' AND Identification NOT IN' +
+'(SELECT Identification FROM [' + @CloudMultiTenantNameDestination + '].[dbo].[ThirdParty] ' + 
+'WHERE TenantID = 0x' + CONVERT(nvarchar(max), @TenantIdDestination, 2) + ')'
+
+CREATE TABLE #CopiedThirdParties (OldCode bigint, NewCode bigint)
+
+DECLARE @ThirdPartyID AS bigint
+DECLARE @Code AS varchar(20)
+DECLARE @IdType AS bigint
+DECLARE @Identification AS varchar(50)
+DECLARE @FullName AS varchar(200)
+DECLARE @Email AS varchar(100)
+DECLARE @CityCode AS bigint
+DECLARE @Phone AS varchar(128)
+DECLARE @Address AS varchar(250)
+DECLARE @ContactFullName AS varchar(100)
+DECLARE @SendEntryType AS tinyint
+DECLARE @ContactEmail AS varchar(100)
+
+EXECUTE sp_executesql @SQLThirdPartyToCopy
+
+OPEN third_party_cursor
+FETCH NEXT FROM third_party_cursor 
+INTO @ThirdPartyID, @Code, @IdType, @Identification, @FullName, @Email, @CityCode, @Phone, @Address, @TenantID, @ContactFullName, @SendEntryType, @ContactEmail
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+	Declare @InsertSQLThirdParty as nvarchar(max) = 
+	'INSERT INTO ' + @CloudMultiTenantNameDestination + '.dbo.ThirdParty ' + 
+	'(Code, IdType, Identification, FullName, Email, CityCode, Phone, Address, ContactFullName, TenantID, SendEntryType, ContactEmail)' +
+	'VALUES (' +
+	iif(@Code is null, 'null', '''' + @Code + '''') + ',' +
+	convert(varchar(max), @IdType) + ',' +
+	'''' + @Identification + ''',' +
+	'''' + @FullName + ''',' +
+	'''' + @Email + ''',' +
+	convert(varchar(max), @CityCode) + ',' +
+	'''' + @Phone + ''',' +
+	'''' + @Address + ''',' +
+	'''' + @ContactFullName + ''',' +
+	'0x' + CONVERT(nvarchar(max), @TenantIdDestination, 2) + ', ' +
+	convert(varchar(max), @SendEntryType) + ',' +
+	iif(@ContactEmail is null, 'null', '''' + @ContactEmail + '''') +
+	') ' +
+	'SET @InsertedID = SCOPE_IDENTITY()'
+	--print @InsertSQLThirdParty
+	EXECUTE sp_executesql @InsertSQLThirdParty, N'@InsertedID bigint OUTPUT', @InsertedID OUTPUT 
+	Insert into #CopiedThirdParties(OldCode, NewCode) Values (@ThirdPartyID, @InsertedID)
+    FETCH NEXT FROM third_party_cursor 
+	INTO @ThirdPartyID, @Code, @IdType, @Identification, @FullName, @Email, @CityCode, @Phone, @Address, @TenantID, @ContactFullName, @SendEntryType, @ContactEmail
+END
+
+CLOSE third_party_cursor
+DEALLOCATE third_party_cursor
+
+--Fin Proceso de copia de terceros--
+
 SELECT * FROM #CopiedResolutions
+SELECT * FROM #CopiedThirdParties
+
 DROP TABLE #CopiedResolutions
+DROP TABLE #CopiedThirdParties
